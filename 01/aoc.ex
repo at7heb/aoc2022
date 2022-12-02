@@ -20,6 +20,15 @@ defmodule Aoc do
     # |> Enum.take(5)
     |> Enum.map(fn a -> Enum.sum(a) end)
     # |> IO.inspect(label: "first 5")
-    |> Enum.max()
+    |> Enum.max() |> IO.inspect(label: "part 1 answer")
+
+    d
+    |> Enum.map(fn a -> Enum.sum(a) end)
+    |> Enum.sort(:desc)
+    |> Enum.take(3)
+    |> IO.inspect(label: "part 2 components")
+    |> Enum.sum()
+    |> IO.inspect(label: "part 2 answer")
+    []
   end
 end
