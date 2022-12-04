@@ -5,30 +5,30 @@ defmodule Aoc do
   end
 
   def tst do
-    a =  """
+    """
     2-4,6-8
     2-3,4-5
     5-7,7-9
     2-8,3-7
     6-6,4-6
     2-6,4-8
+    3-7,2-8
+    3-7,3-7
     """
-    a
     |> process_and_print
   end
 
   def process_and_print(d) do
-    d
-    |> String.trim()
-    |> String.split("\n")
+    d1 = d |> String.trim() |> String.split("\n")
+    IO.inspect(Enum.count(d1), label: "length of d1")
+
+    d1
     |> process_data
     |> print_answer
 
-    d
-    |> String.trim()
-    |> String.split("\n")
-    |> process_data_2
-    |> print_answer
+    d1
+    |> process_data
+    |> print_answer_2
   end
 
   def read_data do
@@ -37,45 +37,68 @@ defmodule Aoc do
 
   def process_data(d) do
     d
-    |> Enum.map(fn a -> make_2_parts(a) end)
-    |> Enum.map(fn {p1, p2} -> MapSet.intersection(p1, p2) end)
-    |> Enum.map(fn a -> MapSet.to_list(a) end)
-    |> Enum.map(fn a -> Enum.at(a,0) end)
-    # |> IO.inspect(label: "intersections")
+    |> Enum.map(fn a -> String.split(a, ["-", ","])
+            |> (Enum.map(fn a -> String.to_integer(a) end)) end)
   end
 
- def process_data_2(d) do
+  def print_answer_2(d) do
     d
-    |> Enum.map(fn a -> String.split(a, "", trim: true) |> MapSet.new() end)
-    |> Enum.chunk_every(3)
-    |> IO.inspect(label: "chunked")
-    |> Enum.map(fn [a1, a2, a3] -> MapSet.intersection(a1, MapSet.intersection(a2, a3)) end)
-    |> Enum.map(fn a -> MapSet.to_list(a) |> Enum.at(0) end)
-    |> IO.inspect(label: "process data 2 result")
+    |> Enum.map(fn [a, b, c, d] -> score_2(a, b, c, d) end)
+    |> Enum.sum()
+    |> IO.inspect(label: "answer 2")
   end
 
   def print_answer(d) do
     d
     # |> Enum.take(6)
-    |> IO.inspect(label: "in answer")
+    # |> IO.inspect(label: "in answer")
     |> score()
     |> IO.inspect(label: "the answer")
-    []
   end
 
   def score(d) do
-    reference_string = String.split(" abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", "", trim: true)
-    _s1 = Enum.map(d, fn a -> Enum.find_index(reference_string, fn b -> a==b end) end)
-    # |> IO.inspect(label: "individual priorities")
+    d
+    |> Enum.map(fn [a, b, c, d] -> score(a, b, c, d) end)
     |> Enum.sum()
-    |> IO.inspect(label: "summed priorities")
   end
 
-  def make_2_parts(s) do
-    l = String.length(s)
-    l2 = div(l,2)
-    part1 = String.slice(s, 0, l2)
-    part2 = String.slice(s, l2, l2)
-    {MapSet.new(String.split(part1, "", trim: true)), MapSet.new(String.split(part2,  "", trim: true))}
+  def score(a, b, c, d) when a == c do
+    1
+    end
+
+  def score(a, b, c, d) when a <= b and a <= c and c <= d do
+    rv =
+    cond do
+      b >= d -> 1
+      true -> 0
+    end
+    if rv == 0 do
+      IO.inspect({rv, "for", a, b, c, d}, label: "score")
+    end
+    rv
   end
+
+  def score(a, b, c, d) when a <= b and a > c and c <= d do
+    # score(c, d, a, b)
+    rv =
+    cond do
+      d >= b -> 1
+      true -> 0
+    end
+    if rv == 0 do
+      IO.inspect({rv, "for", a, b, c, d}, label: "score")
+    end
+    rv
+  end
+
+  def score_2(a, b, c, d) when a <= b and c <= d do
+    rv =
+    cond do
+      b < c -> 0    # no overlap
+      d < a -> 0    # no overlap
+      true -> 1
+    end
+    # IO.inspect({rv, "for", a, b, c, d}, label: "score_2")
+    rv
+   end
 end
