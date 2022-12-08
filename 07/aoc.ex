@@ -1,8 +1,13 @@
 defmodule Aoc do
+  # alias Enumerable.Date
+  defstruct current_directory: [], commands: [], directories: %{}
+
+  import D
+  import F
+
   def run do
     data = read_data()
     data |> process_and_print
-    # data |> process_and_print_2
   end
 
   def tst do
@@ -30,33 +35,75 @@ $ ls
 8033020 d.log
 5626152 d.ext
 7214296 k
-    """
+"""
     d |> process_and_print
   end
 
   def process_and_print(d) do
-    # <<a, b, c, d, z::binary>> = d
-    # process(a, b, c, d, z, 4)
-    process(d, 4) |> IO.inspect(label: "ans1")
-    process_som(d, 14) |> IO.inspect(label: "ans2")
+    %Aoc{}
+    |> add_root_directory
+    |> add_commands(d) |> IO.inspect(label: "state")
+    |> execute_commands()
+    |> visit()
+    |> get_matching_directories()
+    |> print_answer()
   end
 
-  def process(d, n) do
-    <<a, b, c, d, z::binary>> = d
-    uniq_count = length(Enum.uniq([a, b, c, d]))
-    cond do
-      uniq_count == 4 -> n
-      true -> process(<<b, c, d>> <> z, n+1)
-    end
+  def add_commands(%Aoc{} = state, text) do
+    command_list = (
+      String.split(text, "\n", trim: true)
+      |> Enum.map(fn x -> String.split(x, " ", trim: true) end)
+    )
+    %{state | commands: command_list}
   end
 
-  def process_som(d, offset) do
-    <<a, b, c, d, e, f, g, h, i, j, k, l, m, n, z::binary>> = d
-    uniq_count = length(Enum.uniq([a, b, c, d, e, f, g, h, i, j, k, l, m, n]))
-    cond do
-      uniq_count == 14 -> offset
-      true -> process_som(<<b, c, d, e, f, g, h, i, j, k, l, m, n>> <> z, offset+1)
-    end
+  def execute_commands(%Aoc{} = state) do
+    state.commands
+    |> Enum.reduce(state, fn x, state -> execute_one_command(state, x) end)
+  end
+
+  def execute_one_command(%Aoc{} = state, ["$", "cd", "/"] = _cmd), do: state
+
+  def execute_one_command(%Aoc{} = state, ["$", "cd", dirname] = _cmd) do
+    state
+  end
+
+  def execute_one_command(%Aoc{} = state, ["$", "ls"] = _cmd), do: state
+
+  def execute_one_command(%Aoc{} = state, ["dir", dir_name] = _cmd) do
+    state
+  end
+
+
+  def execute_one_command(%Aoc{} = state, [size, name] = _cmd) do
+    state
+  end
+  # def execute_one_command(%Aoc{} = state, [] = _cmd) do
+  #   state
+  # end
+
+  # def execute_one_command(%Aoc{} = state, [] = _cmd) do
+
+  # end
+
+  def visit(%Aoc{} = state) do
+    state
+  end
+
+  def get_matching_directories(%Aoc{} = state) do
+    state.directories
+  end
+
+  def print_answer(dirs) when is_list(dirs) do
+    IO.puts(42)
+  end
+
+  def add_root_directory(%Aoc{} = state) do
+    slash = %D{}
+    #   defstruct name: "", size: 0, files: [], directories: []
+
+    slash = %{slash | name: ["/"]}
+    %{state | current_directory: slash.name, directories: %{["/"] => slash} }
   end
 
   def read_data do
