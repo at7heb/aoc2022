@@ -1,11 +1,13 @@
 defmodule Aoc do
   defstruct pile_count: 0, piles: {}, moves: [], data: ""
   def run do
-    read_data()
-    |> process_and_print
+    data = read_data()
+    data |> process_and_print
+    data |> process_and_print_2
   end
 
   def tst do
+    data =
 """
     [D]
 [N] [C]
@@ -17,26 +19,30 @@ move 3 from 1 to 3
 move 2 from 2 to 1
 move 1 from 1 to 2
 """
-    |> process_and_print
+    data |> process_and_print
+    data |> process_and_print_2
   end
 
   def process_and_print(d) do
     %Aoc{}
     |> add_puzzle_data(d)
-    # |> IO.inspect(label: "initial")
     |> get_number_of_piles()
-    # |> IO.inspect(label: "number")
     |> get_piles()
-    # |> IO.inspect(label: "piles")
     |> get_moves()
-    # |> IO.inspect(label: "moves")
     |> apply_moves()
-    |> IO.inspect(label: "final")
     |> print_answer
+  end
 
-    # d1
-    # |> process_data
-    # |> print_answer_2
+  def process_and_print_2(d) do
+    %Aoc{}
+    |> add_puzzle_data(d)
+    |> get_number_of_piles()
+    |> get_piles()
+    |> get_moves()
+    |> add_extra_pile() #|> IO.inspect(label: "withextra")
+    |> apply_moves_2()
+    |> remove_extra_pile() #|> IO.inspect(label: "withoutextra")
+    |> print_answer
   end
 
   def add_puzzle_data(%Aoc{} = s, d) do
@@ -80,6 +86,9 @@ move 1 from 1 to 2
     handle_one_pile_level(s, rest, index + 1)
   end
 
+  def handle_one_pile_level(%Aoc{} = s,
+    <<" ", " ", " ">>, _index), do: s
+
   def handle_one_pile_level(%Aoc{piles: piles} = s,
     <<"[", z, "]">>, index) do
     # this case for initial / medial [.] (but not final)
@@ -108,22 +117,47 @@ move 1 from 1 to 2
   end
 
   def apply_moves(%Aoc{moves: moves} = s) do
-    IO.inspect(s, label: "apply_moves")
+    # IO.inspect(s, label: "apply_moves")
     Enum.reduce(moves, s, fn elem, acc -> apply_one_move(acc, elem) end)
   end
 
-  def apply_one_move(%Aoc{piles: piles} = s, {count, from, to} = move) do
-    IO.inspect(move, label: "move")
+  def apply_one_move(%Aoc{piles: piles} = s, {count, from, to} = _move) do
+    # IO.inspect(move, label: "move")
+    # IO.inspect(piles, label: "piles")
     # from and to are 1-based, so decrement
     [top | rest_of_from] = elem(piles, from-1)
     new_to = [top | elem(piles, to-1)]
     new_piles = put_elem(piles, from-1, rest_of_from) |> put_elem(to-1, new_to)
     new_s = %{s | piles: new_piles}
-    IO.inspect({piles, new_piles}, label: "b/a move")
+    # IO.inspect({piles, new_piles}, label: "b/a move")
     case count do
       1 -> new_s
       _ -> apply_one_move(new_s, {count-1, from, to})
     end
+  end
+
+  def apply_moves_2(%Aoc{moves: moves, pile_count: pile_count} = s) do
+    # IO.inspect(s, label: "apply_moves")
+    Enum.reduce(moves, s, fn elem, acc ->
+      apply_one_move(acc, modify_destination_pile(elem, pile_count+1))
+      |> apply_one_move(modify_source_pile(elem, pile_count+1))
+    end)
+  end
+
+  def modify_destination_pile({count, from, _to}, new_to),
+    do: {count, from, new_to}
+
+  def modify_source_pile({count, _from, to}, new_from),
+    do: {count, new_from, to}
+
+  def add_extra_pile(%Aoc{piles: piles}= s) do
+    new_piles = Tuple.append(piles, [])
+    %{s | piles: new_piles}
+  end
+
+  def remove_extra_pile(%Aoc{piles: piles, pile_count: pile_count} = s) do
+    new_piles = Tuple.delete_at(piles, pile_count)
+    %{s | piles: new_piles}
   end
 
   def read_data do
@@ -145,15 +179,8 @@ move 1 from 1 to 2
     []
   end
 
-  def print_answer(%Aoc{} = s) do
-    s
-    # |> Enum.take(6)
-    # |> IO.inspect(label: "in answer")
-    |> score()
-    |> IO.inspect(label: "the answer")
-  end
-
-  def score(%Aoc{} = _s) do
-    42
+  def print_answer(%Aoc{piles: piles} = _s) do
+    Enum.map(Tuple.to_list(piles), fn x -> hd(x) end)
+    |> Enum.reduce("", fn x, acc -> acc <> x end)
   end
 end
