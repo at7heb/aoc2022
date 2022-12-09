@@ -8,6 +8,7 @@ defmodule Aoc do
   def run do
     data = read_data()
     data |> process_and_print
+    []
   end
 
   def tst do
@@ -37,6 +38,7 @@ $ ls
 7214296 k
 """
     d |> process_and_print
+    []
   end
 
   def process_and_print(d) do
@@ -48,6 +50,7 @@ $ ls
     |> update_root_size()
     |> get_matching_directories()
     |> print_answer()
+    |> find_candidate( 70_000_000, 30_000_000 )
   end
 
   def add_commands(%Aoc{} = state, text) do
@@ -172,6 +175,7 @@ $ ls
   def print_answer({%Aoc{directories: dirs} = state, dir_paths}) do
     Enum.reduce(dir_paths, 0, fn path, acc -> acc + (Map.get(dirs, path) |> Map.get(:size)) end)
     |> IO.inspect(label: "the answer:")
+    state
   end
 
   def add_root_directory(%Aoc{} = state) do
@@ -180,6 +184,18 @@ $ ls
 
     slash = %{slash | name: ["/"]}
     %{state | current_directory: slash.name, directories: %{["/"] => slash} }
+  end
+
+  def find_candidate(%Aoc{directories: dirs} = _state,  total_size, minimum_free ) do
+    root_size = dirs |> Map.get(["/"]) |> Map.get(:size)
+    free_before = total_size - root_size
+    needed = minimum_free - free_before
+    IO.inspect({root_size, free_before, needed}, label: "root_size, free_before, needed")
+    dirs
+    |> Map.values()
+    |> Enum.sort(fn a, b -> a.size < b.size end) |> IO.inspect(label: "sorted dirs")
+    |> Enum.filter(fn a -> a.size >= needed end) |> IO.inspect(label: "acceptable")
+    |> Enum.take(1) |> IO.inspect(label: "answer")
   end
 
   def read_data do
