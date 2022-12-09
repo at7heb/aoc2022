@@ -89,7 +89,7 @@ $ ls
     new_current_directory = state.current_directory ++ [dirname]
     directory = %D{name: new_current_directory}
     if Map.get(state.directories, new_current_directory) do
-      IO.inspect({state.directories, new_current_directory}, label: "multiple CDs")
+      # IO.inspect({state.directories, new_current_directory}, label: "multiple CDs")
       [1] = [2,3] # generate an error!
     end
     new_directories = Map.put_new(state.directories, new_current_directory, directory)
@@ -100,14 +100,14 @@ $ ls
   def execute_one_command(%Aoc{} = state, ["$", "ls"] = _cmd), do: state
 
   def execute_one_command(%Aoc{} = state, ["dir", dir_name] = _cmd) do
-    IO.inspect({dir_name, state}, label: "before processing dir output")
+    # IO.inspect({dir_name, state}, label: "before processing dir output")
     current_directory = state.current_directory
     this_directory = Map.get(state.directories, state.current_directory, [])
     new_children = [dir_name | this_directory.children]
     new_directory = %{this_directory | children: new_children}
     new_directories = Map.put(state.directories, current_directory, new_directory)
     %{state | directories: new_directories}
-    |> IO.inspect(label: "after processing dir output")
+    # |> IO.inspect(label: "after processing dir output")
   end
 
 
@@ -150,7 +150,7 @@ $ ls
   end
 
   def get_directory_size(%Aoc{} = state, directory_name) do
-    IO.inspect(state, label: "get_directory_size")
+    # IO.inspect(state, label: "get_directory_size")
     fully_qualified_path = state.current_directory ++ [directory_name]
     directory = Map.get(state.directories, fully_qualified_path, [])
     directory.size
@@ -164,7 +164,7 @@ $ ls
     dir_paths = Map.keys(dirs)
     matching_dirs = (
       Enum.filter(dir_paths, fn path -> (Map.get(dirs, path) |> Map.get(:size)) <= 100_000 end)
-      |> IO.inspect(label: "matching directories")
+      # |> IO.inspect(label: "matching directories")
     )
     {state, matching_dirs}
   end
