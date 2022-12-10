@@ -1,9 +1,13 @@
 defmodule Aoc do
-# c(["d.ex","f.ex","aoc.ex"]); Aoc.tst
-  defstruct current_directory: [], commands: [], directories: %{}
+# c(["aoc.ex"]); Aoc.tst
+  defstruct row_count: 0, column_count: 0, forest_map: %{}, visible_list: []
 
-  import D
-  import F
+  #data structure: map {row::integer,column::integer} -> {height::integer, visible::boolean}
+  # row and column are zero-based
+  # the map also has keys
+  #   :row_count::integer -> integer
+  #   :column_count::integer -> integer
+
 
   def run do
     data = read_data()
@@ -25,159 +29,114 @@ defmodule Aoc do
 
   def process_and_print(d) do
     %Aoc{}
-    |> add_root_directory
-    |> add_commands(d) #|> IO.inspect(label: "state")
-    |> execute_commands()
-    |> visit()
-    |> update_root_size()
-    |> get_matching_directories()
+    |> add_data(d)
+    |> mark_exterior()
+    |> visit_interior()
     |> print_answer()
-    |> find_candidate( 70_000_000, 30_000_000 )
+  end
+  def visit_interior(%Aoc{forest_map: fmap} = state) do
+    row_range = 1..state.row_count-2
+    col_range = 1..state.column_count-2
+    visible_tree_coordinates = (
+      Enum.map(row_range, fn r ->
+              Enum.map(col_range, fn c -> check_visibility(fmap, r, c, state.row_count, state.column_count) end)
+      end)
+      |> List.flatten()
+      |> Enum.filter(fn a -> !is_nil(a) end)
+      )
+    %{state | visible_list: visible_tree_coordinates}
   end
 
-  def add_commands(%Aoc{} = state, text) do
-    command_list = (
-      String.split(text, "\n", trim: true)
-      |> Enum.map(fn x -> String.split(x, " ", trim: true) end)
-    )
-    %{state | commands: command_list}
+  def check_visibility(%{} = fmap, r, c, rc, cc) do
+    visible = (look_north(fmap, r, c, rc, cc) ||
+              look_east(fmap, r, c, rc, cc) ||
+              look_south(fmap, r, c, rc, cc) ||
+              look_west(fmap, r, c, rc, cc))
+    if visible, do: {r, c}, else: nil
   end
 
-  def execute_commands(%Aoc{} = state) do
-    state = (
-      state.commands
-      |> Enum.reduce(state, fn x, state -> execute_one_command(state, x) end)
+  def get_height(fmap, r, c) do
+    {height, _} = Map.get(fmap, {r, c})
+    height
+  end
+
+  def look_north(%{} = fmap, r, c, _rc, _cc) do
+    r_range = 0..r-1
+    height = get_height(fmap, r, c)
+    Enum.reduce_while(
+      r_range,
+      true,
+      fn r_prime, _acc -> if height > get_height(fmap, r_prime, c), do: {:cont, true}, else: {:halt, false} end
     )
-    Enum.reduce_while(1..1000, state, fn _x, state_acc ->
-      if state_acc.current_directory == ["/"],
-        do: {:halt, state_acc},
-        else: {:cont, execute_one_command(state_acc, ["$", "cd", ".."])}
+  end
+
+  def look_south(%{} = fmap, r, c, rc, _cc) do
+    r_range = r+1..rc-1
+    height = get_height(fmap, r, c)
+    Enum.reduce_while(
+      r_range,
+      true,
+      fn r_prime, _acc -> if height > get_height(fmap, r_prime, c), do: {:cont, true}, else: {:halt, false} end
+    )
+  end
+
+  def look_west(%{} = fmap, r, c, _rc, _cc) do
+    c_range = 0..c-1
+    height = get_height(fmap, r, c)
+    Enum.reduce_while(
+      c_range,
+      true,
+      fn c_prime, _acc -> if height > get_height(fmap, r, c_prime), do: {:cont, true}, else: {:halt, false} end
+    )
+  end
+
+  def look_east(%{} = fmap, r, c, _rc, cc) do
+    c_range = c+1..cc-1
+    height = get_height(fmap, r, c)
+    Enum.reduce_while(
+      c_range,
+      true,
+      fn c_prime, _acc -> if height > get_height(fmap, r, c_prime), do: {:cont, true}, else: {:halt, false} end
+    )
+  end
+
+  def mark_exterior(%Aoc{forest_map: fmap} = state) do
+    _borders = (fmap
+                |> Map.keys()
+                |> Enum.filter(fn {r,c} -> r==0 || c==0 || r == state.row_count-1 || c == state.column_count-1 end)
+               )
+    |> set_visible(state)
+  end
+
+  def set_visible(coordinates, %Aoc{forest_map: fmap} = state) do
+    new_fmap = Enum.reduce(coordinates, fmap, fn coord, map -> Map.put(map, coord, set_visible(Map.get(map, coord))) end)
+    %{state | forest_map: new_fmap}
+  end
+
+  def set_visible({h, _}), do: {h, true}
+
+  def add_data(%Aoc{} = forest_map, d) do
+    data_rows = String.split(d, "\n", trim: true) # |> IO.inspect(label: "rows")
+    row_count = length(data_rows)
+    column_count = String.length(hd(data_rows))
+    # IO.inspect({row_count, column_count}, label: "add data 0")
+    map = (
+      Enum.reduce(0..row_count-1, %{}, fn row, map ->
+        Enum.reduce(0..column_count-1, map, fn col, map ->
+          Map.put(map, {row, col}, {Enum.at(data_rows, row,"z") |> String.at(col) |> String.to_integer(), false} )
+        end
+        )
       end
+      )
     )
+    %{forest_map | row_count: row_count, column_count: column_count, forest_map: map}
   end
 
-  def execute_one_command(%Aoc{} = state, ["$", "cd", "/"] = _cmd), do: state
-
-  def execute_one_command(%Aoc{} = state, ["$", "cd", ".."] = _cmd) do
-    this_directory_size = get_directory_size(state)
-    new_current_directory = Enum.slice(state.current_directory, 0, length(state.current_directory)-1)
-    #|> IO.inspect(label: "new directory A")
-    the_directory = Map.get(state.directories, new_current_directory)
-    new_directory_size = this_directory_size + the_directory.size
-    the_new_directory = %{the_directory | size: new_directory_size}
-    new_directories = Map.put(state.directories, new_current_directory, the_new_directory)
-    %{state | current_directory: new_current_directory, directories: new_directories}
-    #|> IO.inspect(label: "state after cd '..'")
-  end
-
-  def execute_one_command(%Aoc{} = state, ["$", "cd", dirname] = _cmd) do
-    new_current_directory = state.current_directory ++ [dirname]
-    directory = %D{name: new_current_directory}
-    if Map.get(state.directories, new_current_directory) do
-      # IO.inspect({state.directories, new_current_directory}, label: "multiple CDs")
-      [1] = [2,3] # generate an error!
-    end
-    new_directories = Map.put_new(state.directories, new_current_directory, directory)
-    %{state | current_directory: new_current_directory,
-              directories: new_directories}
-  end
-
-  def execute_one_command(%Aoc{} = state, ["$", "ls"] = _cmd), do: state
-
-  def execute_one_command(%Aoc{} = state, ["dir", dir_name] = _cmd) do
-    # IO.inspect({dir_name, state}, label: "before processing dir output")
-    current_directory = state.current_directory
-    this_directory = Map.get(state.directories, state.current_directory, [])
-    new_children = [dir_name | this_directory.children]
-    new_directory = %{this_directory | children: new_children}
-    new_directories = Map.put(state.directories, current_directory, new_directory)
-    %{state | directories: new_directories}
-    # |> IO.inspect(label: "after processing dir output")
-  end
-
-
-  def execute_one_command(%Aoc{} = state, [text_size, name] = _cmd) do
-    size = String.to_integer(text_size)
-    #IO.inspect({state.current_directory, name, size}, label: "file")
-    file = %F{name: name, size: size}
-    directory = Map.get(state.directories, state.current_directory, [])
-    new_file_list = [file | directory.files]
-    new_directory_size = directory.size + size
-    new_directory = %{directory | size: new_directory_size,
-                                  files: new_file_list}
-    new_directories = Map.put(state.directories, state.current_directory, new_directory)
-    %{state | directories: new_directories}
-  end
-
-  def update_root_size(%Aoc{} = state) do
-    root_name = ["/"]
-    root_size = (
-      %{state | current_directory: root_name}
-      |> get_directory_size()
-    )
-    root_directory = Map.get(state.directories, root_name, [])
-    new_root_directory = %{root_directory | size: root_size}
-    new_directories = Map.put(state.directories, root_name, new_root_directory)
-    %{state | directories: new_directories}
-  end
-
-  def get_directory_size(%Aoc{} = state) do
-    directory_path = state.current_directory
-    directory = Map.get(state.directories, directory_path, [])
-    size_of_files = Enum.reduce(
-        directory.files, 0, fn elt, acc -> elt.size + acc end
-    )
-    size_of_directories = Enum.reduce(
-        directory.children, 0, fn elt, acc -> get_directory_size(state, elt) + acc end
-    )
-    IO.inspect({directory_path, size_of_files + size_of_directories}, label: "directory size")
-    size_of_files + size_of_directories
-  end
-
-  def get_directory_size(%Aoc{} = state, directory_name) do
-    # IO.inspect(state, label: "get_directory_size")
-    fully_qualified_path = state.current_directory ++ [directory_name]
-    directory = Map.get(state.directories, fully_qualified_path, [])
-    directory.size
-  end
-
-  def visit(%Aoc{} = state) do
-    state
-  end
-
-  def get_matching_directories(%Aoc{directories: dirs} = state) do
-    dir_paths = Map.keys(dirs)
-    matching_dirs = (
-      Enum.filter(dir_paths, fn path -> (Map.get(dirs, path) |> Map.get(:size)) <= 100_000 end)
-      # |> IO.inspect(label: "matching directories")
-    )
-    {state, matching_dirs}
-  end
-
-  def print_answer({%Aoc{directories: dirs} = state, dir_paths}) do
-    Enum.reduce(dir_paths, 0, fn path, acc -> acc + (Map.get(dirs, path) |> Map.get(:size)) end)
-    |> IO.inspect(label: "the answer:")
-    state
-  end
-
-  def add_root_directory(%Aoc{} = state) do
-    slash = %D{}
-    #   defstruct name: "", size: 0, files: [], directories: []
-
-    slash = %{slash | name: ["/"]}
-    %{state | current_directory: slash.name, directories: %{["/"] => slash} }
-  end
-
-  def find_candidate(%Aoc{directories: dirs} = _state,  total_size, minimum_free ) do
-    root_size = dirs |> Map.get(["/"]) |> Map.get(:size)
-    free_before = total_size - root_size
-    needed = minimum_free - free_before
-    IO.inspect({root_size, free_before, needed}, label: "root_size, free_before, needed")
-    dirs
-    |> Map.values()
-    |> Enum.sort(fn a, b -> a.size < b.size end) |> IO.inspect(label: "sorted dirs")
-    |> Enum.filter(fn a -> a.size >= needed end) |> IO.inspect(label: "acceptable")
-    |> Enum.take(1) |> IO.inspect(label: "answer")
+  def print_answer(%Aoc{visible_list: visibles, row_count: rc, column_count: cc} = _state) do
+    visible_count = 2*rc + 2*(cc-2) + length(visibles)
+    IO.puts("in forest_map #{visible_count} trees visible")
+    IO.inspect(visibles, label: "visible interior trees")
+    ""
   end
 
   def read_data do
