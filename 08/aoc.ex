@@ -1,6 +1,6 @@
 defmodule Aoc do
 # c(["aoc.ex"]); Aoc.tst
-  defstruct row_count: 0, column_count: 0, forest_map: %{}, visible_list: []
+  defstruct row_count: 0, column_count: 0, forest_map: %{}, visible_list: [], view_list: []
 
   #data structure: map {row::integer,column::integer} -> {height::integer, visible::boolean}
   # row and column are zero-based
@@ -32,8 +32,74 @@ defmodule Aoc do
     |> add_data(d)
     |> mark_exterior()
     |> visit_interior()
+    |> calculate_the_view()
     |> print_answer()
   end
+
+  def calculate_the_view(%Aoc{forest_map: fmap} = state) do
+    row_range = 1..state.row_count-2
+    col_range = 1..state.column_count-2
+    views = (
+      Enum.map(row_range, fn r ->
+              Enum.map(col_range, fn c -> calculate_view(fmap, r, c, state.row_count, state.column_count) end)
+      end)
+      |> List.flatten()
+      |> IO.inspect(label: "view 2")
+      )
+    %{state | view_list: views}
+  end
+
+  def calculate_view(fmap, r, c, rc, cc) do
+    IO.inspect({r,c}, label: "coordinates")
+    view_score =
+      { view_north(fmap, r, c, rc, cc),
+        view_west(fmap, r, c, rc, cc),
+        view_south(fmap, r, c, rc, cc),
+        view_east(fmap, r, c, rc, cc)
+      } # |> IO.inspect(label: "the views")
+      # |> Tuple.product()
+    {view_score, {r,c}}
+  end
+
+  def fix_boundary({:interior, c}), do: c #|> IO.inspect(label:        "interior fix")
+  def fix_boundary(c) when is_integer(c), do: c-1 #|> IO.inspect(label:  "-------- fix")
+
+  def view_north(fmap, r, c, rc, cc) do
+    height = get_height(fmap, r, c)
+    r-1..0//-1
+    |> Enum.reduce_while(1,
+        fn next_row, count -> if height > get_height(fmap, next_row, c), do: {:cont, count+1}, else: {:halt, {:interior, count}} end
+      )
+    |>fix_boundary()
+  end
+
+  def view_south(fmap, r, c, rc, cc) do
+    height = get_height(fmap, r, c)
+    r+1..rc-1
+    |> Enum.reduce_while(1,
+        fn next_row, count -> if height > get_height(fmap, next_row, c), do: {:cont, count+1}, else: {:halt, {:interior, count}} end
+      )
+    |>fix_boundary()
+    end
+
+  def view_west(fmap, r, c, rc, cc) do
+    height = get_height(fmap, r, c)
+    c-1..0//-1
+    |> Enum.reduce_while(1,
+        fn next_col, count -> if height > get_height(fmap, r, next_col), do: {:cont, count+1}, else: {:halt, {:interior, count}} end
+      )
+    |>fix_boundary()
+    end
+
+  def view_east(fmap, r, c, rc, cc) do
+    height = get_height(fmap, r, c)
+    c+1..cc-1
+    |> Enum.reduce_while(1,
+        fn next_col, count -> if height > get_height(fmap, r, next_col), do: {:cont, count+1}, else: {:halt, {:interior, count}} end
+      )
+    |>fix_boundary()
+    end
+
   def visit_interior(%Aoc{forest_map: fmap} = state) do
     row_range = 1..state.row_count-2
     col_range = 1..state.column_count-2
@@ -132,10 +198,15 @@ defmodule Aoc do
     %{forest_map | row_count: row_count, column_count: column_count, forest_map: map}
   end
 
-  def print_answer(%Aoc{visible_list: visibles, row_count: rc, column_count: cc} = _state) do
+  def print_answer(%Aoc{visible_list: visibles, row_count: rc, column_count: cc, view_list: view_list} = _state) do
     visible_count = 2*rc + 2*(cc-2) + length(visibles)
     IO.puts("in forest_map #{visible_count} trees visible")
-    IO.inspect(visibles, label: "visible interior trees")
+    # IO.inspect(visibles, label: "visible interior trees")
+    Enum.map(view_list, fn {scores, coords} -> {Tuple.product(scores), coords} end)
+    |> Enum.sort(fn {a,_}, {z,_} -> a > z end)
+    |> Enum.take(5) |> IO.inspect()
+    |> Enum.at(0)
+    |> IO.inspect(label: "view product")
     ""
   end
 
