@@ -1,6 +1,7 @@
 defmodule Aoc do
 # c(["aoc.ex"]); Aoc.tst
-  defstruct h: {0, 0}, t: {0, 0}, lt: {}, tail_path: MapSet.new([{0,0}])
+  defstruct program: [], c_pc: 1, c_x: 1, c_ck: 1,
+    bkpts: %{20=>nil, 60=>nil, 100=>nil, 140=>nil, 180=>nil, 220=>nil}
 
   #data structure: map {row::integer,column::integer} -> {visited::boolean}
   # row and column are zero-based
@@ -16,11 +17,96 @@ defmodule Aoc do
     []
   end
 
+def parse_data(data) do
+    data
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn s -> String.split(s, " ") end)
+    |> Enum.map(fn inst -> parse_instruction(inst) end)
+  end
+
+  def parse_instruction([opcode, string_value]=op) when is_list(op), do: [opcode, String.to_integer(string_value)]
+
+  def parse_instruction([opcode]) when is_binary(opcode), do: [opcode]
+
+  def process_and_print(%Aoc{} = state, data) do
+    parse_data(data)
+    |> add_program(state)
+    |> execute_program()
+    |> print_answer
+
+    # IO.puts("long tail / part 2 follows=================================================")
+    # new_state = %{state | lt: Tuple.duplicate({0,0}, 10)}
+    # parse_data(data)
+    # |> long_tail_follows_head(new_state)
+    # |> print_answer
+  end
+
+  def execute_program(%Aoc{program: program, c_pc: pc} = state)
+    when pc > length(program), do: state
+
+  def execute_program(%Aoc{program: program, c_pc: pc} = state) do
+    execute_instruction(state, Enum.at(program, pc-1))
+    |> execute_program()
+  end
+
+  def execute_instruction(%Aoc{} = state, ["noop"]) do
+    # IO.inspect(state, label: "noop starting")
+    trigger_breakpoints(state)
+    |> advance_clock()
+    |> advance_pc()
+  end
+
+  def execute_instruction(%Aoc{} = state, ["addx", value]) do
+    trigger_breakpoints(state)
+    |> advance_clock()
+    |> trigger_breakpoints
+    |> addx(value)
+    |> advance_clock()
+    |> advance_pc()
+  end
+
+  # def advance_clock(%Aoc{c_ck: clock} = state), do: %{state | c_ck: clock + 1}
+  def advance_clock(%Aoc{c_ck: clock} = state) do
+    IO.inspect({state.c_pc, clock, Enum.at(state.program, state.c_pc-1), state.c_x}, label: "uCode")
+    %{state | c_ck: clock + 1}
+  end
+
+  def advance_pc(%Aoc{c_pc: pc} = state), do: %{state | c_pc: pc + 1}
+
+  def addx(%Aoc{c_x: x} = state, value), do: %{state | c_x: x + value}
+
+  def trigger_breakpoints(%Aoc{c_ck: clock, bkpts: breaks, c_x: x} = state) do
+    case Map.fetch(breaks, clock) do
+      :error -> state
+      {:ok, nil} -> %{state | bkpts: Map.put(breaks, clock, clock * x)}
+    end
+  end
+
+  def add_program(data, %Aoc{} = state) when is_list(data) do
+    %{state | program: data}
+  end
+
+  def print_answer(%Aoc{} = state) do
+    answer = state.c_x
+    IO.puts("answer = #{answer}")
+    IO.inspect(state.bkpts, label: "breakpoint values")
+    IO.puts("other answer #{state.bkpts |> Map.values() |> Enum.sum()}")
+    ""
+  end
+
+  def read_data do
+    File.read!("data.txt")
+    |> String.trim()
+  end
+
   def tst do
     data = """
 noop
 addx 3
+noop
 addx -5
+noop
+noop
 """
     %Aoc{}
     |> process_and_print(data)
@@ -176,129 +262,8 @@ noop
 noop
 noop
 """
-  %Aoc{}
-  |> process_and_print(data)
-  []
-end
-
-def parse_data(data) do
-    data
-    |> String.split("\n", trim: true)
-    |> Enum.map(fn s -> String.split(s, " ") end)
-    |> Enum.map(fn [d, c] -> [d, String.to_integer(c)] end)
-  end
-
-  def process_and_print(%Aoc{} = state, data) do
-    parse_data(data)
-    |> tail_follows_head(state)
-    |> print_answer
-
-    IO.puts("long tail / part 2 follows=================================================")
-    new_state = %{state | lt: Tuple.duplicate({0,0}, 10)}
-    parse_data(data)
-    |> long_tail_follows_head(new_state)
-    |> print_answer
-  end
-
-  def long_tail_follows_head(moves, %Aoc{} = state) do
-    direction_map = %{"U"=>{1,0}, "L"=>{0,-1}, "D"=>{-1,0}, "R"=>{0,1}}
-    moves
-    |> Enum.reduce(state, fn [d, c] = _move, state -> long_tail_follows_head(state, direction_map[d], c) end)
-  end
-
-  def long_tail_follows_head(%Aoc{} = state, _rc_increments, 0) do
-    state
-  end
-
-  def long_tail_follows_head(%Aoc{} = state, rc_increments, c) do
-    state
-    |> long_move_head_by_one(rc_increments)
-    |> long_tail_follows_by_one(8)
-    |> long_tail_follows_head(rc_increments, c-1)
-  end
-
-  def long_tail_follows_by_one(%Aoc{lt: rope} = state, index) do
-    {h_r, h_c} = elem(rope, index + 1)
-    {t_r, t_c} = elem(rope, index)
-    dist = max(abs(h_r-t_r), abs(h_c-t_c))
-    cond do
-      (dist <= 1) -> state
-      true -> adjust_rope(state, {t_r + funny_signum(h_r - t_r), t_c + funny_signum(h_c - t_c)}, index)
-    end
-  end
-
-  def adjust_rope(%Aoc{lt: rope, tail_path: path} = state, {_r,_c} = coord, 0) do
-    new_rope = put_elem(rope, 0, coord)
-    new_path = MapSet.put(path, coord)
-    IO.inspect(coord, label: "point added to path")
-    %{state | lt: new_rope, tail_path: new_path}
-  end
-
-  def adjust_rope(%Aoc{lt: rope} = state, {_r,_c} = coord, index) do
-    new_rope = put_elem(rope, index, coord)
-    %{state | lt: new_rope}
-    |> long_tail_follows_by_one(index - 1)
-  end
-
-  def long_move_head_by_one(%Aoc{lt: rope} = state, {delta_r, delta_c} = _incr) do
-    {h_r, h_c} = elem(rope,9)
-    new_h = {h_r + delta_r, h_c + delta_c}
-    new_rope = put_elem(rope, 9, new_h)
-    %{state | lt: new_rope}
-  end
-
-###############################################################################
-######################### S H O R T ###########################################
-###############################################################################
-  def tail_follows_head(moves, %Aoc{} = state) do
-    direction_map = %{"U"=>{1,0}, "L"=>{0,-1}, "D"=>{-1,0}, "R"=>{0,1}}
-    moves
-    |> Enum.reduce(state, fn [d, c] = _move, state -> tail_follows_head(state, direction_map[d], c) end)
-  end
-
-  def tail_follows_head(%Aoc{} = state, _rc_increments, 0) do
-    state
-  end
-
-  def tail_follows_head(%Aoc{} = state, rc_increments, c) do
-    state
-    |> move_head_by_one(rc_increments)
-    |> tail_follows_by_one()
-    |> tail_follows_head(rc_increments, c-1)
-  end
-
-  def move_head_by_one(%Aoc{h: {h_r, h_c}} = state, {delta_r, delta_c} = _incr) do
-    new_h = {h_r + delta_r, h_c + delta_c}
-    %{state | h: new_h}
-  end
-
-  def tail_follows_by_one(%Aoc{h: {h_r, h_c}, t: {t_r, t_c} = t, tail_path: path} = state) do
-    dist = max(abs(h_r-t_r), abs(h_c-t_c))
-    new_t = cond do
-      (dist <= 1) -> t
-      true -> {t_r + funny_signum(h_r - t_r), t_c + funny_signum(h_c - t_c)}
-    end
-    new_path = MapSet.put(path, new_t)
-    # IO.inspect({new_t, new_path}, label: "tail follows")
-    %{state | t: new_t, tail_path: new_path} # |> IO.inspect(label: "state")
-  end
-
-  def funny_signum(a) do
-    cond do
-      a < 0   -> -1
-      a == 0  ->  0
-      true    ->  1
-    end
-  end
-
-  def print_answer(%Aoc{tail_path: path} = _state) do
-    answer = MapSet.size(path) |> IO.inspect(label: "position count")
-    IO.puts("rope tail visited #{answer} positions at least once")
-    ""
-  end
-
-  def read_data do
-    File.read!("data.txt")
-    |> String.trim()
+    %Aoc{}
+    |> process_and_print(data)
+    []
   end
 end
