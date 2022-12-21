@@ -1,5 +1,5 @@
 defmodule Aoc do
-# c(["M.ex", "aoc.ex"]); Aoc.tst
+# c(["m.ex", "aoc.ex"]); Aoc.tst
 
   import M
 
@@ -20,7 +20,7 @@ def parse_data(data) do
     data
     |> String.split("\n\n", trim: true)
     |> Enum.reduce(%{}, fn spec, monkeys -> Map.put(monkeys, get_monkey_number(spec), get_monkey_specification(spec)) end)
-    |> IO.inspect(label: "monkeys")
+    # |> IO.inspect(label: "monkeys")
     # |> Enum.map(fn s -> String.split(s, " ") end)
     # |> Enum.map(fn inst -> parse_instruction(inst) end)
   end
@@ -82,26 +82,70 @@ def parse_data(data) do
 
   def process_and_print(data) do
     parse_data(data)
-    |> execute_rounds(1..20)
+    |> execute_rounds(1..10000)
+    |> IO.inspect(label: "after the rounds")
+    |> Map.to_list()
+    |> Enum.map(fn {_k, v} -> (0 + v.inspections) end)
+    |> IO.inspect(label: "list of inspection counts")
+    |> Enum.sort(:desc)
+    |> Enum.take(2)
+    |> IO.inspect(label: "top 2")
+    # |> Enum.map(fn x -> x end)
+    # |> IO.inspect(label: "top 2 true")
+    |> Enum.product()
+    |> IO.inspect(label: "product")
   end
 
   def execute_rounds(%{} = monkeys, range) do
-    Enum.reduce(range, monkeys, fn _r, m -> execute_round(m) end)
+    Enum.reduce(range, monkeys, fn r, m -> execute_round(m, r) end)
   end
 
-  def execute_round(%{} = monkeys) do
-    range = 1 .. Enum.max(Map.keys(monkeys))
-    Enum.reduce(range, monkeys, fn num, m -> round_for(m, num) end)
+  def execute_round(%{} = monkeys, round) do
+    # IO.puts("Round #{round} starting---------------------------------------------")
+    range = Enum.min(Map.keys(monkeys)) .. Enum.max(Map.keys(monkeys))
+    rv = Enum.reduce(range, monkeys, fn num, m -> round_for(m, num) end)
+    if (round == 1) || (round == 20) do IO.inspect(rv, label: "round #{round}") end
+    rv
   end
 
-  def round_for(%{} = m, key) do
-    monkey = Map.fetch!(m, key)
-    i = monkey.inspections + length(monkey.items)
-    new_monkey = %{monkey | inspections: i}
-
-    IO.inspect({key, monkey, new_monkey})
-    Map.put(m, key, new_monkey)
+  def round_for(%{} = monkeys, key) do
+    rv = (monkeys |> Map.fetch!(key) |> handle_items(monkeys, key))
+    # IO.inspect({key, monkeys}, label: "did round for monkey#")
+    rv
   end
+
+  def handle_items(%M{} = monkey, monkeys, key) do
+    modulus = get_modulus(monkeys)
+    new_monkeys = Enum.reduce(monkey.items, monkeys, fn item, monkeys -> handle_an_item(item, monkey, monkeys, modulus) end)
+    new_inspections = monkey.inspections + length(monkey.items)
+    new_monkey = %{monkey | items: [], inspections: new_inspections}
+    Map.put(new_monkeys, key, new_monkey)
+  end
+
+  def handle_an_item(item, %M{} = monkey, monkeys, modulus) do
+    op_add = monkey.op_add; op_mult = monkey.op_mult; op_exponent = monkey.op_exponent
+    divisor = monkey.divisor;
+    true_monkey = monkey.if_true; false_monkey = monkey.if_false
+    new_item = (op_mult*(item + op_add) |> pow(op_exponent) |> rem(modulus))
+    # IO.inspect({new_item, item, op_add, op_mult, op_exponent, modulus}, label: "new_item")
+    remainder = rem(new_item, divisor)
+    destination_monkey = if remainder == 0 do true_monkey else false_monkey end
+    add_item_to_monkey(new_item, destination_monkey, monkeys)
+  end
+
+  def add_item_to_monkey(item, number, monkeys) do
+    monkey = Map.fetch!(monkeys, number)
+    items = monkey.items ++ [item]
+    new_monkey = %{monkey| items: items}
+    Map.put(monkeys, number, new_monkey)
+  end
+
+  def get_modulus(monkeys) do
+    Enum.reduce(Map.values(monkeys), 1, fn monkey, modulus -> modulus * Map.fetch!(monkey, :divisor) end)
+  end
+
+  def pow(n, 1), do: n
+  def pow(n, 2), do: n*n
 
   def print_answer(_state) do
   end
